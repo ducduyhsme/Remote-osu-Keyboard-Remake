@@ -6,9 +6,10 @@ A high-performance, ultra-low latency touch-to-keyboard input relay for [osu!](h
 
 - **Ultra-low latency**: ~5-15ms over WiFi, ~1-5ms over USB
 - **Zero dropped inputs**: UDP fire-and-forget protocol with no head-of-line blocking
-- **3 connection modes**: WiFi, USB (ADB), and Bluetooth
+- **3 connection modes**: WiFi, USB (ADB), and Bluetooth (plus USB Tethering)
+- **Zero Configuration USB**: The PC server automatically downloads ADB, forwards ports, and detects Tethering IPs. No manual command-line typing required!
+- **Floating Full Screen Mode**: Place your two fingers anywhere on the screen! The app automatically tracks them as Key 1 and Key 2.
 - **Auto-discovery**: Server is automatically found on the local network
-- **Smart touch handling**: Accidental 3rd finger touches never block your inputs
 - **Configurable keys**: Change key bindings to any key
 - **Real-time latency display**: See your current latency while playing
 - **No antivirus issues**: Uses standard Windows SendInput API (no suspicious DLLs)
@@ -138,14 +139,15 @@ Download the latest APK from the [Releases](../../releases) page and install it 
    - Go to Settings → About Phone → tap "Build Number" 7 times
    - Go to Settings → Developer Options → enable "USB Debugging"
 2. Connect your phone to PC via USB cable
-3. Install [ADB](https://developer.android.com/tools/releases/platform-tools) on your PC
-4. Run these commands:
-   ```bash
-   adb reverse tcp:7221 tcp:7221
-   adb reverse tcp:7220 tcp:7220
-   ```
-5. Start the PC server
-6. Open the Android app → select **USB** → tap **Connect via USB**
+3. Start the PC server. **The server will automatically download `adb` in the background and set up port forwarding for you!** (No need to type `adb reverse` manually).
+4. Open the Android app → select **USB** → tap **Connect via USB**.
+
+### USB Tethering (Alternative Low Latency)
+
+1. Enable both **USB Debugging** and **USB Tethering** on your Android phone.
+2. Connect your phone to PC via USB cable.
+3. Start the PC server. It will automatically detect your tethering network IP!
+4. Open the Android app → select **WiFi**. The server will be auto-discovered over the tethered network just like regular WiFi.
 
 ### Bluetooth (Not Recommended)
 
@@ -169,15 +171,11 @@ Download the latest APK from the [Releases](../../releases) page and install it 
 ### Touch Modes
 
 - **Split Screen** (default): Left/right halves are separate keys. Simple and reliable.
-- **Full Screen**: Uses finger detection to assign keys. Configure in Settings.
+- **Full Screen (Floating)**: Two fingers can float freely anywhere on the screen! The first finger to touch is automatically assigned as Key 1, and the second is Key 2.
 
-### Finger Pair Settings
+### Prevent Third Finger (Experimental)
 
-In Settings, you can choose which fingers you play with:
-- Index + Ring (recommended)
-- Index + Middle
-- Index + Pinky
-- And more...
+In Settings, you can enable the experimental "Prevent Third Finger" mode. When enabled, you can calibrate 5 fingers and select your **Finger Pair** (e.g. Index + Ring) to help the app intelligently reject accidental touches from other fingers.
 
 ---
 
