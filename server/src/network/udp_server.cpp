@@ -20,6 +20,9 @@ bool UdpServer::start(uint16_t port) {
         return false;
     }
 
+    // Prevent child processes (like adb.exe) from inheriting the socket and keeping the port open
+    SetHandleInformation((HANDLE)socket_, HANDLE_FLAG_INHERIT, 0);
+
     // Set socket options for low latency
     // Disable buffering
     int optval = 1;

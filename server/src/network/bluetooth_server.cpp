@@ -43,6 +43,9 @@ bool BluetoothServer::start() {
         return false;
     }
 
+    // Prevent inheritance
+    SetHandleInformation((HANDLE)listenSocket_, HANDLE_FLAG_INHERIT, 0);
+
     SOCKADDR_BTH addr = {};
     addr.addressFamily = AF_BTH;
     addr.btAddr = 0;
@@ -128,6 +131,9 @@ void BluetoothServer::acceptLoop() {
             }
             continue;
         }
+
+        // Prevent inheritance
+        SetHandleInformation((HANDLE)clientSocket, HANDLE_FLAG_INHERIT, 0);
 
         LOG_INFO("Bluetooth", "Client connected via Bluetooth");
 

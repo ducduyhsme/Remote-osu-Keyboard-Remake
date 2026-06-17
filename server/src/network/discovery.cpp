@@ -44,6 +44,9 @@ bool DiscoveryService::start(uint16_t tcpPort, uint16_t udpPort) {
         return false;
     }
 
+    // Prevent child processes (like adb.exe) from inheriting the socket and keeping the port open
+    SetHandleInformation((HANDLE)socket_, HANDLE_FLAG_INHERIT, 0);
+
     int optval = 1;
     setsockopt(socket_, SOL_SOCKET, SO_BROADCAST, reinterpret_cast<const char*>(&optval), sizeof(optval));
     setsockopt(socket_, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&optval), sizeof(optval));

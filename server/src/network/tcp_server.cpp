@@ -19,6 +19,9 @@ bool TcpServer::start(uint16_t port) {
         return false;
     }
 
+    // Prevent child processes (like adb.exe) from inheriting the socket and keeping the port open
+    SetHandleInformation((HANDLE)listenSocket_, HANDLE_FLAG_INHERIT, 0);
+
     // Allow port reuse
     int optval = 1;
     setsockopt(listenSocket_, SOL_SOCKET, SO_REUSEADDR, (const char*)&optval, sizeof(optval));
@@ -95,6 +98,9 @@ void TcpServer::acceptLoop() {
             }
             continue;
         }
+
+        // Prevent inheritance for client socket too
+        SetHandleInformation((HANDLE)clientSocket, HANDLE_FLAG_INHERIT, 0);
 
         // Disconnect existing client if any, then wait until its worker exits
         // before publishing the new socket into client_.
