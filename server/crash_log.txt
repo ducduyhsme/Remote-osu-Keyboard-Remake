@@ -1,0 +1,30 @@
+setupConsole done
+WSAStartup done
+Args done
+Server created
+Gui created instance
+Gui created window
+Logger wired
+[90m[00000000ms][0m [36m[INFO ][0m [35m[Server][0m ===========================================
+[90m[00000000ms][0m [36m[INFO ][0m [35m[Server][0m   Remote osu! Keyboard v1.0.0
+[90m[00000000ms][0m [36m[INFO ][0m [35m[Server][0m ===========================================
+[90m[00000000ms][0m [36m[INFO ][0m [35m[Config][0m No config file found, using defaults
+[90m[00000000ms][0m [36m[INFO ][0m [35m[Input][0m Key 0 set to: Z
+[90m[00000000ms][0m [36m[INFO ][0m [35m[Input][0m Key 1 set to: X
+[90m[00000006ms][0m [36m[INFO ][0m [35m[Server][0m Local IP addresses:
+[90m[00000007ms][0m [36m[INFO ][0m [35m[Server][0m   -> 100.112.226.100
+[90m[00000007ms][0m [36m[INFO ][0m [35m[Server][0m   -> 192.168.56.1
+[90m[00000007ms][0m [36m[INFO ][0m [35m[Server][0m   -> 192.168.208.214
+[90m[00000007ms][0m [36m[INFO ][0m [35m[Server][0m   -> 192.168.1.105
+[90m[00000007ms][0m [36m[INFO ][0m [35m[Server][0m   -> 172.19.16.1
+[90m[00000007ms][0m [36m[INFO ][0m [35m[Server][0m Key bindings: [Z] [X]
+[90m[00000008ms][0m [36m[INFO ][0m [35m[UDP][0m Listening on port 7220
+[90m[00000009ms][0m [36m[INFO ][0m [35m[UDP][0m Receive loop started (high priority thread)
+[90m[00000009ms][0m [36m[INFO ][0m [35m[TCP][0m Listening on port 7221
+[90m[00000009ms][0m [36m[INFO ][0m [35m[Server][0m Setting up ADB reverse port forwarding...
+[90m[00000009ms][0m [36m[INFO ][0m [35m[TCP][0m Waiting for client...
+[90m[00000441ms][0m [36m[INFO ][0m [35m[Discovery][0m Auto-discovery active on port 7222
+[90m[00000442ms][0m [36m[INFO ][0m [35m[Server][0m Bluetooth not available on this PC
+[90m[00000442ms][0m [36m[INFO ][0m [35m[Server][0m All services started. Waiting for connections...
+[90m[00000442ms][0m [36m[INFO ][0m [35m[Server][0m Type 'help' for available commands
+Server started

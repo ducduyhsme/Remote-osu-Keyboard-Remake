@@ -1,69 +1,64 @@
-# Prerequisites
-*.d
+# ===== Server (C++) =====
+server/build/
+server/out/
+server/cmake-build-*/
+server/.vs/
+server/*.sln
+server/*.vcxproj*
+server/*.user
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Linker files
-*.ilk
-
-# Debugger Files
-*.pdb
-
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-*.so.*
-
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
-
-# Build directories
-build/
-Build/
-build-*/
-
-# CMake generated files
-CMakeFiles/
+# CMake
 CMakeCache.txt
+CMakeFiles/
 cmake_install.cmake
 Makefile
-install_manifest.txt
-compile_commands.json
+*.cmake
 
-# Temporary files
-*.tmp
+# Build artifacts
+*.exe
+*.dll
+*.obj
+*.o
+*.a
+*.lib
+*.pdb
+*.ilk
+*.exp
+*.idb
+
+# ===== Android =====
+android/.gradle/
+android/build/
+android/app/build/
+android/app/.cxx/
+android/local.properties
+android/captures/
+
+# Android Studio
+*.iml
+.idea/
+.externalNativeBuild/
+
+# Gradle
+.gradle/
+gradle-app.setting
+
+# Signing
+*.jks
+*.keystore
+
+# APK
+*.apk
+*.aab
+
+# ===== General =====
+.DS_Store
+Thumbs.db
 *.log
-*.bak
 *.swp
+*.swo
+*~
 
-# vcpkg
-vcpkg_installed/
-
-# debug information files
-*.dwo
-
-# test output & cache
-Testing/
-.cache/
+# IDE
+.vscode/
+*.code-workspace
