@@ -40,6 +40,7 @@ fun SettingsScreen(
     var visualFeedback by remember { mutableStateOf(prefs.getBoolean("visual", true)) }
     var touchMode by remember { mutableIntStateOf(prefs.getInt("touchMode", 0)) }
     var useCalibration by remember { mutableStateOf(prefs.getBoolean("useCalibration", true)) }
+    var preventThirdFinger by remember { mutableStateOf(prefs.getBoolean("preventThirdFinger", false)) }
 
     val fingerPairs = remember {
         listOf(
@@ -126,8 +127,48 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // ===== Calibration Section (visible when Full Screen selected) =====
-                if (touchMode == 1) {
+                // ===== Prevent Third Finger (Experimental) =====
+                SettingsSection(title = "PREVENT THIRD FINGER (EXPERIMENTAL)") {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = DarkCard),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "Prevent Third Finger",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    "When enabled, the app attempts to reject accidental touches from other fingers using advanced calibration.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondary
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Switch(
+                                checked = preventThirdFinger,
+                                onCheckedChange = { preventThirdFinger = it },
+                                colors = SwitchDefaults.colors(
+                                    checkedTrackColor = WarningYellow,
+                                    checkedThumbColor = Color.White
+                                )
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // ===== Calibration Section (visible when Prevent Third Finger selected) =====
+                if (preventThirdFinger) {
                     SettingsSection(title = "CALIBRATION") {
                         Card(
                             colors = CardDefaults.cardColors(containerColor = DarkCard),
@@ -172,40 +213,42 @@ fun SettingsScreen(
                             )
                         }
                     }
-                }
 
-                // ===== Finger Pair Section =====
-                SettingsSection(title = "FINGER PAIR") {
-                    Text(
-                        text = "Choose which two fingers you play with. This helps the app ignore accidental touches from other fingers.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextMuted,
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    )
+                    Spacer(modifier = Modifier.height(24.dp))
 
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = DarkCard),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(4.dp)) {
-                            fingerPairs.forEachIndexed { index, pair ->
-                                if (index > 0) {
-                                    HorizontalDivider(color = DarkSurfaceVariant)
+                    // ===== Finger Pair Section =====
+                    SettingsSection(title = "FINGER PAIR") {
+                        Text(
+                            text = "Choose which two fingers you play with. This helps the app ignore accidental touches from other fingers.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextMuted,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = DarkCard),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(4.dp)) {
+                                fingerPairs.forEachIndexed { index, pair ->
+                                    if (index > 0) {
+                                        HorizontalDivider(color = DarkSurfaceVariant)
+                                    }
+                                    RadioOption(
+                                        title = pair.name,
+                                        description = pair.description,
+                                        isSelected = selectedFingerPair == index,
+                                        onClick = { selectedFingerPair = index },
+                                        accentColor = if (pair.description.contains("Recommended"))
+                                            SuccessGreen else null
+                                    )
                                 }
-                                RadioOption(
-                                    title = pair.name,
-                                    description = pair.description,
-                                    isSelected = selectedFingerPair == index,
-                                    onClick = { selectedFingerPair = index },
-                                    accentColor = if (pair.description.contains("Recommended"))
-                                        SuccessGreen else null
-                                )
                             }
                         }
                     }
-                }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
 
                 // ===== Haptic Feedback =====
                 SettingsSection(title = "HAPTIC FEEDBACK") {
@@ -347,6 +390,7 @@ fun SettingsScreen(
                             .putBoolean("visual", visualFeedback)
                             .putInt("touchMode", touchMode)
                             .putBoolean("useCalibration", useCalibration)
+                            .putBoolean("preventThirdFinger", preventThirdFinger)
                             .apply()
                         onBack()
                     },

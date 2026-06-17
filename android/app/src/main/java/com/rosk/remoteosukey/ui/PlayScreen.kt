@@ -137,14 +137,10 @@ fun PlayScreen(
                 .fillMaxSize()
                 .pointerInteropFilter { event ->
                     val screenWidth = view.width.toFloat()
+                    val screenHeight = view.height.toFloat()
                     if (touchMode == 1) {
-                        // Full Screen 5-Zone Mode
-                        val events = touchProcessor.processFullScreenTouches(
-                            event,
-                            view.width,
-                            key1FingerIndex,
-                            key2FingerIndex
-                        )
+                        // Full Screen 2-Finger Floating Mode
+                        val events = touchProcessor.processFullScreenTouches(event, screenWidth, screenHeight)
                         for (e in events) {
                             if (e.keyIndex == 0) {
                                 key1Pressed = e.isDown
@@ -155,6 +151,18 @@ fun PlayScreen(
                             }
                             connectionManager.sendKeyEvent(e.keyIndex, e.isDown)
                         }
+                        
+                        if (event.actionMasked == MotionEvent.ACTION_MOVE) {
+                            for (i in 0 until event.pointerCount) {
+                                val pid = event.getPointerId(i)
+                                if (pid == touchProcessor.getPointerIdForKey(0)) {
+                                    key1RippleCenter = Offset(event.getX(i), event.getY(i))
+                                } else if (pid == touchProcessor.getPointerIdForKey(1)) {
+                                    key2RippleCenter = Offset(event.getX(i), event.getY(i))
+                                }
+                            }
+                        }
+
                         if (event.actionMasked == MotionEvent.ACTION_CANCEL) {
                             touchProcessor.reset()
                             key1Pressed = false

@@ -61,6 +61,10 @@ class TouchProcessor {
     fun reset() {
         key1PointerId = INVALID_POINTER
         key2PointerId = INVALID_POINTER
+        anchor1X = -1f
+        anchor1Y = -1f
+        anchor2X = -1f
+        anchor2Y = -1f
     }
 
     fun isKeyPressed(keyIndex: Int): Boolean {
@@ -71,49 +75,110 @@ class TouchProcessor {
         }
     }
 
-    fun processFullScreenTouches(
-        event: MotionEvent,
-        screenWidth: Int,
-        key1FingerIndex: Int,
-        key2FingerIndex: Int
-    ): List<KeyEvent> {
+    // Anchors for Full Screen Floating Mode (Voronoi cell centers)
+    private var anchor1X: Float = -1f
+    private var anchor1Y: Float = -1f
+    private var anchor2X: Float = -1f
+    private var anchor2Y: Float = -1f
+
+    fun getPointerIdForKey(keyIndex: Int): Int {
+        return when (keyIndex) {
+            0 -> key1PointerId
+            1 -> key2PointerId
+            else -> INVALID_POINTER
+        }
+    }
+
+    fun processFullScreenTouches(event: MotionEvent, screenWidth: Float, screenHeight: Float): List<KeyEvent> {
         val events = mutableListOf<KeyEvent>()
-        
-        // In full screen mode, we divide the screen into 5 equal vertical zones.
-        val zoneWidth = screenWidth / 5f
-        
-        for (i in 0 until event.pointerCount) {
-            val pointerId = event.getPointerId(i)
-            val x = event.getX(i)
-            
-            // Determine zone index 0..4 (left to right)
-            val zone = (x / zoneWidth).toInt().coerceIn(0, 4)
-            
-            if (event.actionMasked == MotionEvent.ACTION_DOWN || event.actionMasked == MotionEvent.ACTION_POINTER_DOWN) {
-                if (event.actionIndex == i) {
-                    // Finger down
-                    if (zone == key1FingerIndex && key1PointerId == INVALID_POINTER) {
-                        key1PointerId = pointerId
-                        events.add(KeyEvent(0, true))
-                    } else if (zone == key2FingerIndex && key2PointerId == INVALID_POINTER) {
-                        key2PointerId = pointerId
-                        events.add(KeyEvent(1, true))
-                    }
-                }
-            } else if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_POINTER_UP) {
-                if (event.actionIndex == i) {
-                    // Finger up
-                    if (pointerId == key1PointerId) {
-                        key1PointerId = INVALID_POINTER
-                        events.add(KeyEvent(0, false))
-                    } else if (pointerId == key2PointerId) {
-                        key2PointerId = INVALID_POINTER
-                        events.add(KeyEvent(1, false))
-                    }
+
+        if (anchor1X == -1f) {
+            anchor1X = screenWidth * 0.25f
+            anchor1Y = screenHeight * 0.5f
+            anchor2X = screenWidth * 0.75f
+            anchor2Y = screenHeight * 0.5f
+        }
+
+        val action = event.actionMasked
+
+        if (action == MotionEvent.ACTION_MOVE) {
+            for (i in 0 until event.pointerCount) {
+                val pid = event.getPointerId(i)
+                val x = event.getX(i)
+                val y = event.getY(i)
+                if (pid == key1PointerId) {
+                    anchor1X = x
+                    anchor1Y = y
+                } else if (pid == key2PointerId) {
+                    anchor2X = x
+                    anchor2Y = y
                 }
             }
+            return events
         }
+
+        if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
+            val actionIndex = event.actionIndex
+            val pointerId = event.getPointerId(actionIndex)
+            val x = event.getX(actionIndex)
+            val y = event.getY(actionIndex)
+
+            val dist1 = distanceSq(x, y, anchor1X, anchor1Y)
+            val dist2 = distanceSq(x, y, anchor2X, anchor2Y)
+
+            if (dist1 <= dist2) {
+                if (key1PointerId == INVALID_POINTER) {
+                    key1PointerId = pointerId
+                    anchor1X = x
+                    anchor1Y = y
+                    events.add(KeyEvent(0, true))
+                } else if (key2PointerId == INVALID_POINTER) {
+                    key2PointerId = pointerId
+                    anchor2X = x
+                    anchor2Y = y
+                    events.add(KeyEvent(1, true))
+                }
+            } else {
+                if (key2PointerId == INVALID_POINTER) {
+                    key2PointerId = pointerId
+                    anchor2X = x
+                    anchor2Y = y
+                    events.add(KeyEvent(1, true))
+                } else if (key1PointerId == INVALID_POINTER) {
+                    key1PointerId = pointerId
+                    anchor1X = x
+                    anchor1Y = y
+                    events.add(KeyEvent(0, true))
+                }
+            }
+        } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP) {
+            val actionIndex = event.actionIndex
+            val pointerId = event.getPointerId(actionIndex)
+            if (pointerId == key1PointerId) {
+                key1PointerId = INVALID_POINTER
+                events.add(KeyEvent(0, false))
+            } else if (pointerId == key2PointerId) {
+                key2PointerId = INVALID_POINTER
+                events.add(KeyEvent(1, false))
+            }
+        } else if (action == MotionEvent.ACTION_CANCEL) {
+            if (key1PointerId != INVALID_POINTER) {
+                key1PointerId = INVALID_POINTER
+                events.add(KeyEvent(0, false))
+            }
+            if (key2PointerId != INVALID_POINTER) {
+                key2PointerId = INVALID_POINTER
+                events.add(KeyEvent(1, false))
+            }
+        }
+
         return events
+    }
+
+    private fun distanceSq(x1: Float, y1: Float, x2: Float, y2: Float): Float {
+        val dx = x1 - x2
+        val dy = y1 - y2
+        return dx * dx + dy * dy
     }
 
     companion object {
