@@ -187,10 +187,6 @@ This app uses the standard Windows `SendInput` API to simulate keyboard presses.
 - Includes a proper application manifest
 - Does not use code obfuscation or packing
 
-If your antivirus still flags it:
-1. Add `RemoteOsuKeyboard.exe` to your antivirus exclusion list
-2. For Windows Defender: Settings → Virus & threat protection → Exclusions → Add an exclusion
-
 ---
 
 ## 🔧 Troubleshooting
