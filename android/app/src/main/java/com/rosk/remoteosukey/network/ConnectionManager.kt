@@ -138,20 +138,25 @@ class ConnectionManager {
         
         if (adapter == null) return false
 
-        val pairedDevices = adapter.bondedDevices
         val serverUuid = UUID.fromString("a1b2c3d4-e5f6-7890-abcd-ef0123456789")
         
-        for (device in pairedDevices) {
-            if (device.address == address) {
-                try {
-                    btSocket = device.createRfcommSocketToServiceRecord(serverUuid)
-                    btSocket?.connect()
-                    connected.set(true)
-                    return true
-                } catch (e: Exception) {
-                    btSocket?.close()
+        try {
+            // Stop discovery before connecting, as it slows down connection
+            try {
+                if (adapter.isDiscovering) {
+                    adapter.cancelDiscovery()
                 }
-            }
+            } catch (e: SecurityException) { }
+
+            val device = adapter.getRemoteDevice(address)
+            btSocket = device.createRfcommSocketToServiceRecord(serverUuid)
+            btSocket?.connect()
+            connected.set(true)
+            return true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            try { btSocket?.close() } catch (ignored: Exception) {}
+            btSocket = null
         }
         return false
     }

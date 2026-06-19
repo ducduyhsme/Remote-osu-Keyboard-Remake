@@ -66,6 +66,12 @@ bool BluetoothServer::start() {
         return false;
     }
 
+    // Retrieve the assigned port
+    int addrLen = sizeof(addr);
+    if (::getsockname(listenSocket_, (sockaddr*)&addr, &addrLen) == SOCKET_ERROR) {
+        LOG_ERR("Bluetooth", "Failed to get assigned port: " + std::to_string(WSAGetLastError()));
+    }
+
     // Register SDP service
     CSADDR_INFO csAddr = {};
     csAddr.LocalAddr.iSockaddrLength = sizeof(SOCKADDR_BTH);

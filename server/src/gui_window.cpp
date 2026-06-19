@@ -240,6 +240,7 @@ LRESULT GuiWindow::handleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
     case WM_DESTROY:
         KillTimer(hwnd_, ID_TIMER_REFRESH);
         PostQuitMessage(0);
+        ExitProcess(0);
         return 0;
 
     case WM_CLOSE:

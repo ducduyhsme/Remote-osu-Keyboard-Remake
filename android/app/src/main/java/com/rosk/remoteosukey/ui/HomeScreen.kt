@@ -29,6 +29,17 @@ import com.rosk.remoteosukey.network.ServerDiscovery
 import com.rosk.remoteosukey.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import android.Manifest
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
+import android.content.Context
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import android.content.Intent
+import android.content.IntentFilter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -165,9 +176,9 @@ fun HomeScreen(
                 accentColor = NeonCyan,
                 isSelected = selectedMode == "wifi",
                 onClick = {
-                    selectedMode = "wifi"
+                    selectedMode = if (selectedMode == "wifi") null else "wifi"
                     // Start discovery
-                    if (!isDiscovering) {
+                    if (selectedMode == "wifi" && !isDiscovering) {
                         isDiscovering = true
                         scope.launch {
                             discoveredServers = ServerDiscovery.discover()
@@ -176,6 +187,28 @@ fun HomeScreen(
                     }
                 }
             )
+            AnimatedVisibility(
+                visible = selectedMode == "wifi",
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Column(modifier = Modifier.padding(top = 12.dp)) {
+                    WifiConnectionPanel(
+                        servers = discoveredServers,
+                        isDiscovering = isDiscovering,
+                        onRefresh = {
+                            scope.launch {
+                                isDiscovering = true
+                                discoveredServers = ServerDiscovery.discover()
+                                isDiscovering = false
+                            }
+                        },
+                        onConnect = { address ->
+                            onNavigateToPlay("wifi", address)
+                        }
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -186,8 +219,21 @@ fun HomeScreen(
                 subtitle = "Connect via USB cable - 0ms latency",
                 accentColor = SuccessGreen,
                 isSelected = selectedMode == "usb_adb",
-                onClick = { selectedMode = "usb_adb" }
+                onClick = { selectedMode = if (selectedMode == "usb_adb") null else "usb_adb" }
             )
+            AnimatedVisibility(
+                visible = selectedMode == "usb_adb",
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Column(modifier = Modifier.padding(top = 12.dp)) {
+                    UsbConnectionPanel(
+                        onConnect = {
+                            onNavigateToPlay("usb_adb", "127.0.0.1")
+                        }
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -198,8 +244,21 @@ fun HomeScreen(
                 subtitle = "Connect via USB Tethering IP",
                 accentColor = NeonCyan,
                 isSelected = selectedMode == "usb_tethering",
-                onClick = { selectedMode = "usb_tethering" }
+                onClick = { selectedMode = if (selectedMode == "usb_tethering") null else "usb_tethering" }
             )
+            AnimatedVisibility(
+                visible = selectedMode == "usb_tethering",
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Column(modifier = Modifier.padding(top = 12.dp)) {
+                    UsbTetheringPanel(
+                        onConnect = { ip ->
+                            onNavigateToPlay("usb_tethering", ip)
+                        }
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -212,53 +271,19 @@ fun HomeScreen(
                 isSelected = selectedMode == "bluetooth",
                 badge = "Not Recommended",
                 badgeColor = WarningYellow,
-                onClick = { selectedMode = "bluetooth" }
+                onClick = { selectedMode = if (selectedMode == "bluetooth") null else "bluetooth" }
             )
-
-            // Expanded content based on selection
             AnimatedVisibility(
-                visible = selectedMode != null,
+                visible = selectedMode == "bluetooth",
                 enter = fadeIn() + expandVertically(),
                 exit = fadeOut() + shrinkVertically()
             ) {
-                Column(
-                    modifier = Modifier.padding(top = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    when (selectedMode) {
-                        "wifi" -> WifiConnectionPanel(
-                            servers = discoveredServers,
-                            isDiscovering = isDiscovering,
-                            onRefresh = {
-                                scope.launch {
-                                    isDiscovering = true
-                                    discoveredServers = ServerDiscovery.discover()
-                                    isDiscovering = false
-                                }
-                            },
-                            onConnect = { address ->
-                                onNavigateToPlay("wifi", address)
-                            }
-                        )
-
-                        "usb_adb" -> UsbConnectionPanel(
-                            onConnect = {
-                                onNavigateToPlay("usb_adb", "127.0.0.1")
-                            }
-                        )
-
-                        "usb_tethering" -> UsbTetheringPanel(
-                            onConnect = { ip ->
-                                onNavigateToPlay("usb_tethering", ip)
-                            }
-                        )
-
-                        "bluetooth" -> BluetoothConnectionPanel(
-                            onConnect = { address ->
-                                onNavigateToPlay("bluetooth", address)
-                            }
-                        )
-                    }
+                Column(modifier = Modifier.padding(top = 12.dp)) {
+                    BluetoothConnectionPanel(
+                        onConnect = { address ->
+                            onNavigateToPlay("bluetooth", address)
+                        }
+                    )
                 }
             }
 
@@ -714,6 +739,132 @@ fun StepItem(number: Int, text: String) {
 fun BluetoothConnectionPanel(
     onConnect: (String) -> Unit
 ) {
+    val context = LocalContext.current
+    val bluetoothManager = remember { context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager }
+    val bluetoothAdapter = remember { bluetoothManager.adapter }
+    
+    var devices by remember { mutableStateOf<List<BluetoothDevice>>(emptyList()) }
+    var isScanning by remember { mutableStateOf(false) }
+
+    var hasPermission by remember {
+        mutableStateOf(
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
+            } else {
+                ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH) == PackageManager.PERMISSION_GRANTED
+            }
+        )
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val granted = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            permissions[Manifest.permission.BLUETOOTH_CONNECT] == true && permissions[Manifest.permission.BLUETOOTH_SCAN] == true
+        } else {
+            permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true || permissions[Manifest.permission.BLUETOOTH] == true
+        }
+        hasPermission = granted
+    }
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                val granted = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED &&
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
+                } else {
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH) == PackageManager.PERMISSION_GRANTED
+                }
+                hasPermission = granted
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (!hasPermission) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                permissionLauncher.launch(arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN))
+            } else {
+                permissionLauncher.launch(arrayOf(Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_ADMIN, Manifest.permission.ACCESS_FINE_LOCATION))
+            }
+        }
+    }
+
+    fun startScan() {
+        if (!hasPermission || bluetoothAdapter == null) return
+        try {
+            // First load bonded devices
+            val bonded = bluetoothAdapter.bondedDevices?.toList() ?: emptyList()
+            devices = bonded
+            
+            // Start discovering new devices
+            if (bluetoothAdapter.isDiscovering) {
+                bluetoothAdapter.cancelDiscovery()
+            }
+            bluetoothAdapter.startDiscovery()
+            isScanning = true
+        } catch (e: SecurityException) {
+            // Permission denied
+        }
+    }
+
+    DisposableEffect(context) {
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                when (intent?.action) {
+                    BluetoothDevice.ACTION_FOUND -> {
+                        val device = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+                        } else {
+                            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                        }
+                        if (device != null) {
+                            devices = (devices + device).distinctBy { it.address }
+                        }
+                    }
+                    BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
+                        isScanning = false
+                    }
+                }
+            }
+        }
+        
+        val filter = IntentFilter().apply {
+            addAction(BluetoothDevice.ACTION_FOUND)
+            addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
+        }
+        
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+        } else {
+            context.registerReceiver(receiver, filter)
+        }
+        
+        onDispose {
+            context.unregisterReceiver(receiver)
+            try {
+                if (hasPermission && bluetoothAdapter?.isDiscovering == true) {
+                    bluetoothAdapter.cancelDiscovery()
+                }
+            } catch (_: SecurityException) {}
+        }
+    }
+
+    LaunchedEffect(hasPermission) {
+        if (hasPermission) {
+            startScan()
+        }
+    }
+
     Card(
         colors = CardDefaults.cardColors(containerColor = DarkCard),
         shape = RoundedCornerShape(16.dp),
@@ -750,27 +901,128 @@ fun BluetoothConnectionPanel(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Text(
-                text = "Make sure your PC's Bluetooth is on and the server is running.",
-                style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Button(
-                onClick = { onConnect("bluetooth") },
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF4488FF),
-                    contentColor = Color.White
-                )
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Filled.Bluetooth, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Scan & Connect", fontWeight = FontWeight.Bold)
+                Text(
+                    text = "Discovered Devices",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = TextPrimary
+                )
+                if (isScanning) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = Color(0xFF4488FF)
+                    )
+                } else {
+                    IconButton(onClick = { startScan() }, modifier = Modifier.size(32.dp)) {
+                        Icon(
+                            Icons.Filled.Refresh,
+                            contentDescription = "Refresh",
+                            tint = Color(0xFF4488FF),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (!hasPermission) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(vertical = 16.dp)
+                ) {
+                    Text(
+                        text = "Bluetooth permissions are required to scan for devices. Please grant them in App Settings.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextMuted,
+                        textAlign = TextAlign.Center
+                    )
+                    Button(
+                        onClick = { 
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                                permissionLauncher.launch(arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN))
+                            } else {
+                                permissionLauncher.launch(arrayOf(Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_ADMIN, Manifest.permission.ACCESS_FINE_LOCATION))
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF4488FF),
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text("Grant Permission", fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = { 
+                            val intent = android.content.Intent(
+                                android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                android.net.Uri.fromParts("package", context.packageName, null)
+                            )
+                            context.startActivity(intent)
+                        },
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Open Settings", color = TextSecondary)
+                    }
+                }
+            } else if (devices.isEmpty() && !isScanning) {
+                Text(
+                    text = "No devices found.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted,
+                    modifier = Modifier.padding(vertical = 16.dp)
+                )
+            }
+
+            devices.forEach { device ->
+                val deviceName = try { device.name ?: "Unknown Device" } catch (_: SecurityException) { "Unknown Device" }
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clickable { onConnect(device.address) },
+                    shape = RoundedCornerShape(12.dp),
+                    color = DarkSurfaceVariant
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Filled.Bluetooth,
+                            contentDescription = null,
+                            tint = Color(0xFF4488FF),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = deviceName,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = device.address,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary
+                            )
+                        }
+                        Icon(
+                            Icons.Filled.ArrowForward,
+                            contentDescription = "Connect",
+                            tint = Color(0xFF4488FF),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
             }
         }
     }

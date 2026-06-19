@@ -1,9 +1,13 @@
 package com.rosk.remoteosukey
 
 import android.os.Bundle
+import android.content.pm.ActivityInfo
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
@@ -21,6 +25,12 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        // Hide system bars (Immersive mode)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        val windowInsetsController = WindowInsetsControllerCompat(window, window.decorView)
+        windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
+
         setContent {
             RemoteOsuKeyboardTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -31,6 +41,7 @@ class MainActivity : ComponentActivity() {
                         startDestination = "home"
                     ) {
                         composable("home") {
+                            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                             HomeScreen(
                                 onNavigateToPlay = { connectionType, serverAddress ->
                                     navController.navigate("play/$connectionType/$serverAddress")
@@ -42,6 +53,7 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable("play/{connectionType}/{serverAddress}") { backStackEntry ->
+                            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                             val connectionType = backStackEntry.arguments?.getString("connectionType") ?: "wifi"
                             val serverAddress = backStackEntry.arguments?.getString("serverAddress") ?: ""
                             PlayScreen(
@@ -53,6 +65,7 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable("settings") {
+                            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                             SettingsScreen(
                                 onBack = { navController.popBackStack() }
                             )
