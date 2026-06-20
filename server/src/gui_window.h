@@ -120,8 +120,10 @@ private:
     bool tcpRunning_ = false;
     bool discoveryRunning_ = false;
     bool btRunning_ = false;
+    bool wifiDirectRunning_ = false;
     bool clientConnected_ = false;
     bool btClientConnected_ = false;
+    bool wifiDirectClientConnected_ = false;
 };
 
 } // namespace rosk

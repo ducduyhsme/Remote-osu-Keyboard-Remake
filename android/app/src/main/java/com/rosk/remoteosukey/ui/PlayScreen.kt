@@ -299,6 +299,7 @@ fun PlayScreen(
                             "wifi", "usb_tethering" -> Icons.Filled.Wifi
                             "usb_adb" -> Icons.Filled.Usb
                             "bluetooth" -> Icons.Filled.Bluetooth
+                            "wifi_direct" -> Icons.Filled.Wifi
                             else -> Icons.Filled.Wifi
                         }
                         val color = when (connectionState) {

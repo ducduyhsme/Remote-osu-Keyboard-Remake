@@ -287,6 +287,31 @@ fun HomeScreen(
                 }
             }
 
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Wi-Fi Direct option
+            ConnectionCard(
+                icon = Icons.Filled.Share,
+                title = "Wi-Fi Direct",
+                subtitle = "Direct P2P connection, ~1-3ms latency",
+                accentColor = Color(0xFFAA66FF),
+                isSelected = selectedMode == "wifi_direct",
+                onClick = { selectedMode = if (selectedMode == "wifi_direct") null else "wifi_direct" }
+            )
+            AnimatedVisibility(
+                visible = selectedMode == "wifi_direct",
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Column(modifier = Modifier.padding(top = 12.dp)) {
+                    WifiDirectConnectionPanel(
+                        onConnect = { address ->
+                            onNavigateToPlay("wifi_direct", address)
+                        }
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
@@ -1021,6 +1046,495 @@ fun BluetoothConnectionPanel(
                             tint = Color(0xFF4488FF),
                             modifier = Modifier.size(18.dp)
                         )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ══════════════════════════════════════════════════════
+// Wi-Fi Direct Connection Panel
+// ══════════════════════════════════════════════════════
+
+@Composable
+fun WifiDirectConnectionPanel(
+    onConnect: (String) -> Unit
+) {
+    val context = LocalContext.current
+    val TAG = "WifiDirect"
+
+    // Wi-Fi P2P Manager
+    val wifiP2pManager = remember {
+        context.getSystemService(Context.WIFI_P2P_SERVICE) as? android.net.wifi.p2p.WifiP2pManager
+    }
+    val channel = remember {
+        wifiP2pManager?.initialize(context, android.os.Looper.getMainLooper(), null)
+    }
+
+    // State
+    var peers by remember { mutableStateOf<List<android.net.wifi.p2p.WifiP2pDevice>>(emptyList()) }
+    var isDiscovering by remember { mutableStateOf(false) }
+    var selectedDevice by remember { mutableStateOf<android.net.wifi.p2p.WifiP2pDevice?>(null) }
+    var isPairing by remember { mutableStateOf(false) }
+    var pairingCode by remember { mutableStateOf("") }
+    var showPairingDialog by remember { mutableStateOf(false) }
+    var connectionError by remember { mutableStateOf<String?>(null) }
+    var trustDevice by remember { mutableStateOf(false) }
+
+    // Permission state
+    var hasPermission by remember {
+        mutableStateOf(
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                ContextCompat.checkSelfPermission(context, Manifest.permission.NEARBY_WIFI_DEVICES) == PackageManager.PERMISSION_GRANTED
+            } else {
+                ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            }
+        )
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val granted = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            permissions[Manifest.permission.NEARBY_WIFI_DEVICES] == true
+        } else {
+            permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
+        }
+        hasPermission = granted
+    }
+
+    // Lifecycle observer to re-check permission
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                val granted = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.NEARBY_WIFI_DEVICES) == PackageManager.PERMISSION_GRANTED
+                } else {
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                }
+                hasPermission = granted
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // Auto-request permission
+    LaunchedEffect(Unit) {
+        if (!hasPermission) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                permissionLauncher.launch(arrayOf(
+                    Manifest.permission.NEARBY_WIFI_DEVICES,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                ))
+            } else {
+                permissionLauncher.launch(arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.CHANGE_WIFI_STATE
+                ))
+            }
+        }
+    }
+
+    // BroadcastReceiver for P2P events
+    DisposableEffect(context) {
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                when (intent?.action) {
+                    android.net.wifi.p2p.WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION -> {
+                        android.util.Log.d(TAG, "PEERS_CHANGED_ACTION received")
+                        try {
+                            wifiP2pManager?.requestPeers(channel) { peerList ->
+                                val deviceList = peerList?.deviceList?.toList() ?: emptyList()
+                                android.util.Log.d(TAG, "Found ${deviceList.size} peers")
+                                for (d in deviceList) {
+                                    android.util.Log.d(TAG, "  Peer: ${d.deviceName} (${d.deviceAddress}), status=${d.status}")
+                                }
+                                peers = deviceList
+                                isDiscovering = false
+                            }
+                        } catch (e: SecurityException) {
+                            android.util.Log.e(TAG, "requestPeers SecurityException: ${e.message}")
+                        }
+                    }
+                    android.net.wifi.p2p.WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION -> {
+                        val networkInfo = intent.getParcelableExtra<android.net.NetworkInfo>(
+                            android.net.wifi.p2p.WifiP2pManager.EXTRA_NETWORK_INFO
+                        )
+                        android.util.Log.d(TAG, "CONNECTION_CHANGED: isConnected=${networkInfo?.isConnected}")
+
+                        if (networkInfo?.isConnected == true) {
+                            wifiP2pManager?.requestConnectionInfo(channel) { info ->
+                                android.util.Log.d(TAG, "ConnectionInfo: groupFormed=${info?.groupFormed}, isGroupOwner=${info?.isGroupOwner}")
+                                android.util.Log.d(TAG, "GO address: ${info?.groupOwnerAddress?.hostAddress}")
+
+                                if (info?.groupFormed == true && !info.isGroupOwner) {
+                                    val goAddress = info.groupOwnerAddress?.hostAddress
+                                    if (goAddress != null) {
+                                        android.util.Log.d(TAG, "Connected! GO IP = $goAddress, navigating to play...")
+                                        isPairing = false
+                                        showPairingDialog = false
+                                        onConnect("$goAddress:7230")
+                                    }
+                                }
+                            }
+                        } else {
+                            android.util.Log.d(TAG, "Connection lost or not connected")
+                        }
+                    }
+                    android.net.wifi.p2p.WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION -> {
+                        val state = intent.getIntExtra(
+                            android.net.wifi.p2p.WifiP2pManager.EXTRA_WIFI_STATE, -1
+                        )
+                        val enabled = state == android.net.wifi.p2p.WifiP2pManager.WIFI_P2P_STATE_ENABLED
+                        android.util.Log.d(TAG, "P2P_STATE_CHANGED: enabled=$enabled")
+                    }
+                    android.net.wifi.p2p.WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION -> {
+                        android.util.Log.d(TAG, "THIS_DEVICE_CHANGED")
+                    }
+                }
+            }
+        }
+
+        val filter = IntentFilter().apply {
+            addAction(android.net.wifi.p2p.WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION)
+            addAction(android.net.wifi.p2p.WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION)
+            addAction(android.net.wifi.p2p.WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION)
+            addAction(android.net.wifi.p2p.WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION)
+        }
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+        } else {
+            context.registerReceiver(receiver, filter)
+        }
+
+        onDispose {
+            context.unregisterReceiver(receiver)
+            // Clean up P2P group on dispose
+            try {
+                wifiP2pManager?.removeGroup(channel, null)
+                wifiP2pManager?.stopPeerDiscovery(channel, null)
+            } catch (_: Exception) {}
+        }
+    }
+
+    // Discover peers
+    fun startDiscovery() {
+        if (!hasPermission || wifiP2pManager == null || channel == null) return
+        connectionError = null
+        isDiscovering = true
+        android.util.Log.d(TAG, "Starting peer discovery...")
+        try {
+            wifiP2pManager.discoverPeers(channel, object : android.net.wifi.p2p.WifiP2pManager.ActionListener {
+                override fun onSuccess() {
+                    android.util.Log.d(TAG, "discoverPeers() SUCCESS")
+                }
+                override fun onFailure(reason: Int) {
+                    val reasonStr = when (reason) {
+                        android.net.wifi.p2p.WifiP2pManager.P2P_UNSUPPORTED -> "P2P_UNSUPPORTED"
+                        android.net.wifi.p2p.WifiP2pManager.BUSY -> "BUSY"
+                        android.net.wifi.p2p.WifiP2pManager.ERROR -> "INTERNAL_ERROR"
+                        else -> "UNKNOWN($reason)"
+                    }
+                    android.util.Log.e(TAG, "discoverPeers() FAILED: $reasonStr")
+                    connectionError = "Discovery failed: $reasonStr"
+                    isDiscovering = false
+                }
+            })
+        } catch (e: SecurityException) {
+            android.util.Log.e(TAG, "discoverPeers SecurityException: ${e.message}")
+            connectionError = "Permission denied"
+            isDiscovering = false
+        }
+    }
+
+    // Connect to device
+    fun connectToDevice(device: android.net.wifi.p2p.WifiP2pDevice) {
+        if (wifiP2pManager == null || channel == null) return
+        isPairing = true
+        connectionError = null
+        android.util.Log.d(TAG, "Connecting to ${device.deviceName} (${device.deviceAddress})...")
+
+        try {
+            // Stop discovery first
+            wifiP2pManager.stopPeerDiscovery(channel, object : android.net.wifi.p2p.WifiP2pManager.ActionListener {
+                override fun onSuccess() { android.util.Log.d(TAG, "stopPeerDiscovery SUCCESS") }
+                override fun onFailure(r: Int) { android.util.Log.w(TAG, "stopPeerDiscovery failed: $r") }
+            })
+
+            val config = android.net.wifi.p2p.WifiP2pConfig().apply {
+                deviceAddress = device.deviceAddress
+                groupOwnerIntent = 0 // Let the other device (Windows) be the Group Owner
+            }
+
+            wifiP2pManager.connect(channel, config, object : android.net.wifi.p2p.WifiP2pManager.ActionListener {
+                override fun onSuccess() {
+                    android.util.Log.d(TAG, "connect() SUCCESS - waiting for group formation...")
+                }
+                override fun onFailure(reason: Int) {
+                    val reasonStr = when (reason) {
+                        android.net.wifi.p2p.WifiP2pManager.P2P_UNSUPPORTED -> "P2P_UNSUPPORTED"
+                        android.net.wifi.p2p.WifiP2pManager.BUSY -> "BUSY"
+                        android.net.wifi.p2p.WifiP2pManager.ERROR -> "INTERNAL_ERROR (code 0)"
+                        else -> "UNKNOWN($reason)"
+                    }
+                    android.util.Log.e(TAG, "connect() FAILED: $reasonStr")
+                    android.util.Log.e(TAG, "TIP: Run 'adb logcat -s wpa_supplicant WifiP2pService' for native error details")
+                    connectionError = "Connect failed: $reasonStr"
+                    isPairing = false
+                }
+            })
+        } catch (e: SecurityException) {
+            android.util.Log.e(TAG, "connect SecurityException: ${e.message}")
+            connectionError = "Permission denied"
+            isPairing = false
+        }
+    }
+
+    // Auto-discover on permission granted
+    LaunchedEffect(hasPermission) {
+        if (hasPermission) {
+            startDiscovery()
+        }
+    }
+
+    // ── UI ──
+    Card(
+        colors = CardDefaults.cardColors(containerColor = DarkCard),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Info banner
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFFAA66FF).copy(alpha = 0.1f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Filled.Info,
+                        contentDescription = null,
+                        tint = Color(0xFFAA66FF),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Wi-Fi Direct creates a dedicated P2P link. Make sure the server app is running on your PC.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFFAA66FF)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Discoverable Devices header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Discoverable Devices",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = TextPrimary
+                )
+                if (isDiscovering) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = Color(0xFFAA66FF)
+                    )
+                } else {
+                    IconButton(onClick = { startDiscovery() }, modifier = Modifier.size(32.dp)) {
+                        Icon(
+                            Icons.Filled.Refresh,
+                            contentDescription = "Refresh",
+                            tint = Color(0xFFAA66FF),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (!hasPermission) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(vertical = 16.dp)
+                ) {
+                    Text(
+                        text = "Wi-Fi Direct permissions are required to discover nearby devices.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextMuted,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = {
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                permissionLauncher.launch(arrayOf(
+                                    Manifest.permission.NEARBY_WIFI_DEVICES,
+                                    Manifest.permission.ACCESS_FINE_LOCATION
+                                ))
+                            } else {
+                                permissionLauncher.launch(arrayOf(
+                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                    Manifest.permission.CHANGE_WIFI_STATE
+                                ))
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFAA66FF),
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text("Grant Permission", fontWeight = FontWeight.Bold)
+                    }
+                }
+            } else if (peers.isEmpty() && !isDiscovering) {
+                Text(
+                    text = "No devices found. Make sure the PC server is running with Wi-Fi Direct enabled.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted,
+                    modifier = Modifier.padding(vertical = 16.dp),
+                    textAlign = TextAlign.Center
+                )
+            } else {
+                // Device list
+                peers.forEach { device ->
+                    val isSelected = selectedDevice?.deviceAddress == device.deviceAddress
+                    val deviceName = device.deviceName.ifEmpty { device.deviceAddress }
+
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .clickable {
+                                selectedDevice = if (isSelected) null else device
+                            },
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isSelected) Color(0xFFAA66FF).copy(alpha = 0.15f) else DarkSurfaceVariant,
+                        border = if (isSelected) BorderStroke(2.dp, Color(0xFFAA66FF)) else null
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Filled.Share,
+                                contentDescription = null,
+                                tint = if (isSelected) Color(0xFFAA66FF) else TextSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = deviceName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    text = device.deviceAddress,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondary
+                                )
+                            }
+                            if (isSelected) {
+                                Icon(
+                                    Icons.Filled.CheckCircle,
+                                    contentDescription = "Selected",
+                                    tint = Color(0xFFAA66FF),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Error message
+            connectionError?.let { error ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFFFF1744).copy(alpha = 0.1f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = error,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFFF1744)
+                        )
+                        Text(
+                            text = "Debug: adb logcat -s wifiDirect wpa_supplicant WifiP2pService",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextMuted,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                }
+            }
+
+            // Pair button
+            if (hasPermission && selectedDevice != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = {
+                        selectedDevice?.let { connectToDevice(it) }
+                    },
+                    enabled = !isPairing,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFAA66FF),
+                        contentColor = Color.White
+                    )
+                ) {
+                    if (isPairing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = Color.White
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Connecting...", fontWeight = FontWeight.Bold)
+                    } else {
+                        Text("Pair", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                }
+
+                if (isPairing) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            isPairing = false
+                            try {
+                                wifiP2pManager?.cancelConnect(channel, object : android.net.wifi.p2p.WifiP2pManager.ActionListener {
+                                    override fun onSuccess() { android.util.Log.d(TAG, "cancelConnect SUCCESS") }
+                                    override fun onFailure(r: Int) { android.util.Log.w(TAG, "cancelConnect failed: $r") }
+                                })
+                                wifiP2pManager?.removeGroup(channel, null)
+                            } catch (_: SecurityException) {}
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Cancel", color = TextSecondary)
                     }
                 }
             }

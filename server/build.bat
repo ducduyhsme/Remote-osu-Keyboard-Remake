@@ -30,7 +30,7 @@ REM Create build output directory
 if not exist "build" mkdir build
 
 REM Compile
-cl.exe /std:c++20 /EHsc /O2 /W3 ^
+cl.exe /std:c++20 /EHsc /O2 /W3 /await ^
     /DWIN32_LEAN_AND_MEAN /DNOMINMAX /DUNICODE /D_UNICODE /D_WIN32_WINNT=0x0A00 ^
     /DAPP_VERSION="\"1.0.0\"" /DAPP_NAME="\"Remote osu! Keyboard\"" ^
     /Fe:build\RemoteOsuKeyboard.exe ^
@@ -46,10 +46,11 @@ cl.exe /std:c++20 /EHsc /O2 /W3 ^
     src\network\discovery.cpp ^
     src\network\bluetooth_server.cpp ^
     src\network\adb_manager.cpp ^
+    src\network\wifi_direct_server.cpp ^
     /I src ^
     /link /SUBSYSTEM:WINDOWS ^
     ws2_32.lib Bthprops.lib iphlpapi.lib Ole32.lib Shell32.lib SetupAPI.lib User32.lib ^
-    Gdi32.lib Comctl32.lib Comdlg32.lib
+    Gdi32.lib Comctl32.lib Comdlg32.lib windowsapp.lib RuntimeObject.lib
 
 if %ERRORLEVEL% EQU 0 (
     echo.

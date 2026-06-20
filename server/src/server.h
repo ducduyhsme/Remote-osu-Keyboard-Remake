@@ -16,6 +16,7 @@
 #include "network/discovery.h"
 #include "network/bluetooth_server.h"
 #include "network/adb_manager.h"
+#include "network/wifi_direct_server.h"
 #include <atomic>
 #include <string>
 
@@ -45,9 +46,11 @@ public:
     bool isTcpRunning() const { return tcpServer_.isRunning(); }
     bool isDiscoveryRunning() const { return discovery_.isRunning(); }
     bool isBtRunning() const { return btServer_.isRunning(); }
+    bool isWifiDirectRunning() const { return wifiDirectServer_.isRunning(); }
 
     bool hasTcpClient() const { return tcpServer_.hasClient(); }
     bool hasBtClient() const { return btServer_.hasClient(); }
+    bool hasWifiDirectClient() const { return wifiDirectServer_.hasClient(); }
     std::string getClientName() const;
 
     std::string getKeyName(int index) const { return input_.getKeyName(static_cast<uint8_t>(index)); }
@@ -69,6 +72,7 @@ private:
     TcpServer tcpServer_;
     DiscoveryService discovery_;
     BluetoothServer btServer_;
+    WifiDirectServer wifiDirectServer_;
     AdbManager adbManager_;
 
     std::atomic<bool> running_{ false };

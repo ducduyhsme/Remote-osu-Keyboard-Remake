@@ -12,6 +12,7 @@ import java.nio.ByteOrder
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import android.util.Log
 
 /**
  * Connection states
@@ -78,6 +79,7 @@ class ConnectionManager {
                 "wifi", "usb_tethering" -> connectTcp(address, useUdpInput = true)
                 "usb_adb" -> connectTcp(address, useUdpInput = false)
                 "bluetooth" -> connectBluetooth(address)
+                "wifi_direct" -> connectWifiDirect(address)
                 else -> false
             }
         } catch (e: Exception) {
@@ -161,6 +163,32 @@ class ConnectionManager {
         return false
     }
 
+    private suspend fun connectWifiDirect(address: String): Boolean {
+        Log.d("WifiDirect", "Connecting to Wi-Fi Direct server at $address")
+
+        val endpoint = parseEndpoint(address)
+        val host = endpoint.host
+        val port = if (endpoint.port == TCP_CONTROL_PORT) 7230 else endpoint.port
+
+        try {
+            val tcp = Socket()
+            tcp.tcpNoDelay = true // Critical: disable Nagle for ultra-low latency
+            tcp.soTimeout = 5000
+            tcp.connect(InetSocketAddress(InetAddress.getByName(host), port), TCP_CONNECT_TIMEOUT_MS)
+
+            // Store as tcpSocket for cleanup
+            tcpSocket = tcp
+            udpSocket = null // No UDP for Wi-Fi Direct
+
+            connected.set(true)
+            Log.d("WifiDirect", "Connected to Wi-Fi Direct server at $host:$port")
+            return true
+        } catch (e: Exception) {
+            Log.e("WifiDirect", "Connection failed: ${e.message}", e)
+            return false
+        }
+    }
+
     /**
      * Sends a key event to the PC.
      */
@@ -202,6 +230,25 @@ class ConnectionManager {
                     try {
                         btSocket?.outputStream?.write(packetBytes)
                     } catch (_: Exception) { }
+                }
+                "wifi_direct" -> {
+                    // 2-byte packet: [action][keyIndex]
+                    val wfdPacket = ByteArray(2)
+                    wfdPacket[0] = if (isDown) 0x01.toByte() else 0x00.toByte()
+                    wfdPacket[1] = keyIndex.toByte()
+                    try {
+                        synchronized(this@ConnectionManager) {
+                            val out = tcpSocket?.outputStream
+                            if (out != null) {
+                                out.write(wfdPacket)
+                                out.flush()
+                            }
+                        }
+                    } catch (_: Exception) {
+                        Log.e("WifiDirect", "Send failed, closing socket")
+                        tcpSocket?.close()
+                        tcpSocket = null
+                    }
                 }
             }
         }

@@ -385,7 +385,7 @@ void GuiWindow::onPaint(HDC hdc) {
 
     // ── Services Panel ──
     int svcY = 335;
-    RECT svcRc = { x, svcY, x + panelW, svcY + 160 };
+    RECT svcRc = { x, svcY, x + panelW, svcY + 188 };
     drawPanel(memDC, svcRc, L"Services");
 
     int svcRow = svcY + 32;
@@ -413,10 +413,15 @@ void GuiWindow::onPaint(HDC hdc) {
     drawText(memDC, x + panelW - 130, svcRow, btRunning_ ? L"Running" : L"Off",
              btRunning_ ? GuiColors::Green : GuiColors::TextSecondary, false, 15);
 
-
+    svcRow += ROW_H;
+    drawStatusDot(memDC, x + PANEL_PAD, svcRow + 6, wifiDirectRunning_);
+    drawText(memDC, x + PANEL_PAD + 20, svcRow, L"Wi-Fi Direct", GuiColors::TextPrimary, false, 15);
+    std::wstring wfdStatus = wifiDirectRunning_ ? (wifiDirectClientConnected_ ? L"Connected" : L"Advertising") : L"Off";
+    COLORREF wfdColor = wifiDirectRunning_ ? (wifiDirectClientConnected_ ? GuiColors::Green : GuiColors::Yellow) : GuiColors::TextSecondary;
+    drawText(memDC, x + panelW - 130, svcRow, wfdStatus, wfdColor, false, 15);
 
     // ── Settings label ──
-    int settY = 530;
+    int settY = 558;
     drawText(memDC, x, settY - 18, L"Settings", GuiColors::TextPrimary, true, 16);
 
     // Blit
@@ -577,14 +582,14 @@ void GuiWindow::refreshStatus() {
     tcpRunning_ = server_->isTcpRunning();
     discoveryRunning_ = server_->isDiscoveryRunning();
     btRunning_ = server_->isBtRunning();
+    wifiDirectRunning_ = server_->isWifiDirectRunning();
     clientConnected_ = server_->hasTcpClient();
     btClientConnected_ = server_->hasBtClient();
+    wifiDirectClientConnected_ = server_->hasWifiDirectClient();
 
     if (clientConnected_) {
         statusClient_ = toWide(server_->getClientName());
     }
-
-
 }
 
 std::wstring GuiWindow::toWide(const std::string& str) {

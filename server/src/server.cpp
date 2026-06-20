@@ -117,6 +117,25 @@ bool Server::start() {
         }
     }
 
+    // Wi-Fi Direct
+    if (wifiDirectServer_.start()) {
+        wifiDirectServer_.onInput([this](uint8_t keyIndex, bool down) {
+            input_.processInput(keyIndex, down);
+            inputsProcessed_++;
+            if (config_.showKeyPresses) {
+                std::string action = down ? "DOWN" : "UP  ";
+                LOG_DEBUG("Input", input_.getKeyName(keyIndex) + " " + action + " (WifiDirect)");
+            }
+        });
+        wifiDirectServer_.onConnect([](const std::string& device) {
+            LOG_INFO("WifiDirect", "Device connected: " + device);
+        });
+        wifiDirectServer_.onDisconnect([this]() {
+            LOG_INFO("WifiDirect", "Device disconnected");
+            input_.releaseAll();
+        });
+    }
+
     LOG_INFO("Server", "All services started. Waiting for connections...");
     LOG_INFO("Server", "Type 'help' for available commands");
     return true;
@@ -129,6 +148,7 @@ void Server::stop() {
     LOG_INFO("Server", "Shutting down...");
 
     input_.releaseAll();
+    wifiDirectServer_.stop();
     btServer_.stop();
     adbManager_.stop();
     discovery_.stop();
@@ -196,6 +216,8 @@ void Server::printStatus() {
     std::cout << "ADB: " << (adbManager_.isRunning() ? "Active" : "Inactive") << std::endl;
     std::cout << "Bluetooth: " << (btServer_.isRunning() ? "Running" : "Not running")
               << (btServer_.hasClient() ? " [CLIENT CONNECTED]" : "") << std::endl;
+    std::cout << "Wi-Fi Direct: " << (wifiDirectServer_.isRunning() ? "Running" : "Not running")
+              << (wifiDirectServer_.hasClient() ? " [CLIENT CONNECTED]" : "") << std::endl;
 
     auto ips = DiscoveryService::getLocalIPs();
     std::cout << "IP Addresses:";
