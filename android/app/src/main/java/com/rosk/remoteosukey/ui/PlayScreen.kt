@@ -93,6 +93,22 @@ fun PlayScreen(
     
     val touchMode = remember { prefs.getInt("touchMode", 0) }
     val fingerPair = remember { prefs.getInt("fingerPair", 0) }
+    val preventThirdFinger = remember { prefs.getBoolean("preventThirdFinger", false) }
+    val isCalibrated = remember { prefs.getBoolean("is_calibrated", false) }
+    val deadMinRatio = remember { prefs.getFloat("calibrated_deadzone_min_ratio", -1f) }
+    val deadMaxRatio = remember { prefs.getFloat("calibrated_deadzone_max_ratio", -1f) }
+    val calKey1Ratio = remember { prefs.getFloat("calibrated_key1_ratio", -1f) }
+    val calKey2Ratio = remember { prefs.getFloat("calibrated_key2_ratio", -1f) }
+
+    val calibratedBounds = remember(isCalibrated, deadMinRatio, deadMaxRatio) {
+        TouchProcessor.CalibratedHandBounds(
+            key1XRatio = calKey1Ratio,
+            key2XRatio = calKey2Ratio,
+            deadZoneMinXRatio = deadMinRatio,
+            deadZoneMaxXRatio = deadMaxRatio,
+            isCalibrated = isCalibrated
+        )
+    }
 
     val view = LocalView.current
     var isUiVisible by remember { mutableStateOf(true) }

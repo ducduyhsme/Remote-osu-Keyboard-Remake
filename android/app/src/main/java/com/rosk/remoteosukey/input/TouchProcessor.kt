@@ -20,6 +20,14 @@ class TouchProcessor {
         val isDown: Boolean
     )
 
+    data class CalibratedHandBounds(
+        val key1XRatio: Float = -1f,
+        val key2XRatio: Float = -1f,
+        val deadZoneMinXRatio: Float = -1f,
+        val deadZoneMaxXRatio: Float = -1f,
+        val isCalibrated: Boolean = false
+    )
+
     private var key1PointerId: Int = INVALID_POINTER
     private var key2PointerId: Int = INVALID_POINTER
 
@@ -28,6 +36,12 @@ class TouchProcessor {
     private var anchor1Y: Float = -1f
     private var anchor2X: Float = -1f
     private var anchor2Y: Float = -1f
+
+    private var calibrationBounds: CalibratedHandBounds? = null
+
+    fun setCalibrationData(bounds: CalibratedHandBounds) {
+        this.calibrationBounds = bounds
+    }
 
     fun reset(): List<KeyEvent> {
         val events = mutableListOf<KeyEvent>()
@@ -60,6 +74,19 @@ class TouchProcessor {
             1 -> key2PointerId
             else -> INVALID_POINTER
         }
+    }
+
+    /**
+     * Checks if a touch position (x) falls within the calibrated middle finger rejection dead zone.
+     */
+    private fun isTouchInDeadZone(x: Float, screenWidth: Float, calibration: CalibratedHandBounds?): Boolean {
+        if (screenWidth <= 0f) return false
+        val cal = calibration ?: calibrationBounds
+        if (cal != null && cal.isCalibrated && cal.deadZoneMinXRatio >= 0f && cal.deadZoneMaxXRatio >= 0f) {
+            val xRatio = x / screenWidth
+            return xRatio >= cal.deadZoneMinXRatio && xRatio <= cal.deadZoneMaxXRatio
+        }
+        return false
     }
 
     /**
@@ -108,7 +135,13 @@ class TouchProcessor {
     }
 
     // ===== Mode 0: Split Screen Mode =====
-    fun processSplitScreenTouches(event: MotionEvent, screenWidth: Float, screenHeight: Float): List<KeyEvent> {
+    fun processSplitScreenTouches(
+        event: MotionEvent,
+        screenWidth: Float,
+        screenHeight: Float,
+        preventThirdFinger: Boolean = false,
+        calibration: CalibratedHandBounds? = null
+    ): List<KeyEvent> {
         val events = mutableListOf<KeyEvent>()
         val action = event.actionMasked
 
@@ -123,6 +156,13 @@ class TouchProcessor {
             val actionIndex = event.actionIndex
             val pointerId = event.getPointerId(actionIndex)
             val x = event.getX(actionIndex)
+
+            // Option C filtering: Check calibrated middle finger dead zone
+            if (preventThirdFinger && isTouchInDeadZone(x, screenWidth, calibration)) {
+                // Reject touch from middle finger dead zone
+                return events
+            }
+
             val isLeftSide = x < screenWidth / 2f
 
             if (isLeftSide) {
@@ -152,7 +192,13 @@ class TouchProcessor {
     }
 
     // ===== Mode 1: Full Screen Floating Mode =====
-    fun processFullScreenTouches(event: MotionEvent, screenWidth: Float, screenHeight: Float): List<KeyEvent> {
+    fun processFullScreenTouches(
+        event: MotionEvent,
+        screenWidth: Float,
+        screenHeight: Float,
+        preventThirdFinger: Boolean = false,
+        calibration: CalibratedHandBounds? = null
+    ): List<KeyEvent> {
         val events = mutableListOf<KeyEvent>()
         val action = event.actionMasked
 
@@ -185,6 +231,12 @@ class TouchProcessor {
                 val x = event.getX(actionIndex)
                 val y = event.getY(actionIndex)
 
+                // Option C filtering: Check calibrated middle finger dead zone
+                if (preventThirdFinger && isTouchInDeadZone(x, screenWidth, calibration)) {
+                    // Reject touch from middle finger dead zone
+                    return events
+                }
+
                 if (key1PointerId == INVALID_POINTER && key2PointerId == INVALID_POINTER) {
                     // Neither key is currently down
                     if (anchor1X != -1f && anchor2X != -1f) {
@@ -203,16 +255,32 @@ class TouchProcessor {
                         }
                     } else {
                         // Initial first touch
-                        if (x < screenWidth / 2f) {
-                            key1PointerId = pointerId
-                            anchor1X = x
-                            anchor1Y = y
-                            events.add(KeyEvent(0, true))
+                        val cal = calibration ?: calibrationBounds
+                        if (cal != null && cal.isCalibrated && cal.deadZoneMinXRatio >= 0f) {
+                            val xRatio = x / screenWidth
+                            if (xRatio < cal.deadZoneMinXRatio) {
+                                key1PointerId = pointerId
+                                anchor1X = x
+                                anchor1Y = y
+                                events.add(KeyEvent(0, true))
+                            } else {
+                                key2PointerId = pointerId
+                                anchor2X = x
+                                anchor2Y = y
+                                events.add(KeyEvent(1, true))
+                            }
                         } else {
-                            key2PointerId = pointerId
-                            anchor2X = x
-                            anchor2Y = y
-                            events.add(KeyEvent(1, true))
+                            if (x < screenWidth / 2f) {
+                                key1PointerId = pointerId
+                                anchor1X = x
+                                anchor1Y = y
+                                events.add(KeyEvent(0, true))
+                            } else {
+                                key2PointerId = pointerId
+                                anchor2X = x
+                                anchor2Y = y
+                                events.add(KeyEvent(1, true))
+                            }
                         }
                     }
                 } else if (key1PointerId != INVALID_POINTER && key2PointerId == INVALID_POINTER) {

@@ -41,6 +41,17 @@ fun SettingsScreen(
     var touchMode by remember { mutableIntStateOf(prefs.getInt("touchMode", 0)) }
     var useCalibration by remember { mutableStateOf(prefs.getBoolean("useCalibration", true)) }
     var preventThirdFinger by remember { mutableStateOf(prefs.getBoolean("preventThirdFinger", false)) }
+    var isCalibrated by remember { mutableStateOf(prefs.getBoolean("is_calibrated", false)) }
+    var showCalibrationDialog by remember { mutableStateOf(false) }
+
+    if (showCalibrationDialog) {
+        CalibrationDialog(
+            onDismiss = { showCalibrationDialog = false },
+            onCalibrated = {
+                isCalibrated = prefs.getBoolean("is_calibrated", false)
+            }
+        )
+    }
 
     val fingerPairs = remember {
         listOf(
@@ -153,7 +164,7 @@ fun SettingsScreen(
                                     color = TextPrimary
                                 )
                                 Text(
-                                    "When enabled, the app attempts to reject accidental touches from other fingers using advanced calibration.",
+                                    "When enabled, Option C rejects middle finger touches using custom hand calibration.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = TextSecondary
                                 )
@@ -178,51 +189,47 @@ fun SettingsScreen(
 
                 // ===== Calibration Section (visible when Prevent Third Finger selected) =====
                 if (preventThirdFinger) {
-                    SettingsSection(title = "CALIBRATION") {
+                    SettingsSection(title = "OPTION C HAND CALIBRATION") {
                         Card(
                             colors = CardDefaults.cardColors(containerColor = DarkCard),
                             shape = RoundedCornerShape(16.dp)
                         ) {
-                            Row(
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                    .padding(16.dp)
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        "Use Calibration",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = TextPrimary
-                                    )
-                                    Text(
-                                        "Place 5 fingers to calibrate before playing. Recommended for accurate finger detection.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = TextSecondary
-                                    )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            "Hand Geometry Calibration",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = TextPrimary
+                                        )
+                                        Text(
+                                            if (isCalibrated) "Status: Calibrated" else "Status: Not Calibrated",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (isCalibrated) SuccessGreen else WarningYellow,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                    Button(
+                                        onClick = { showCalibrationDialog = true },
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = NeonCyan)
+                                    ) {
+                                        Text(
+                                            text = if (isCalibrated) "Recalibrate" else "Calibrate Now",
+                                            color = Color.Black,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Switch(
-                                    checked = useCalibration,
-                                    onCheckedChange = {
-                                        useCalibration = it
-                                        prefs.edit().putBoolean("useCalibration", it).apply()
-                                    },
-                                    colors = SwitchDefaults.colors(
-                                        checkedTrackColor = NeonCyan,
-                                        checkedThumbColor = Color.White
-                                    )
-                                )
                             }
-                        }
-                        if (!useCalibration) {
-                            Text(
-                                text = "Without calibration, finger positions are estimated in real-time. Less accurate but no setup needed.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextMuted,
-                                modifier = Modifier.padding(top = 8.dp, start = 4.dp)
-                            )
                         }
                     }
 
