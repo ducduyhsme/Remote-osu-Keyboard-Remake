@@ -91,8 +91,23 @@ fun PlayScreen(
     val connectionManager = remember { com.rosk.remoteosukey.network.ConnectionManager() }
     val prefs = remember { context.getSharedPreferences("rosk_prefs", android.content.Context.MODE_PRIVATE) }
     
-    val touchMode = remember { prefs.getInt("touchMode", 0) }
-    val fingerPair = remember { prefs.getInt("fingerPair", 0) }
+    var touchMode by remember { mutableIntStateOf(prefs.getInt("touchMode", 0)) }
+    var fingerPair by remember { mutableIntStateOf(prefs.getInt("fingerPair", 1)) }
+    var preventThirdFinger by remember { mutableStateOf(prefs.getBoolean("preventThirdFinger", false)) }
+
+    DisposableEffect(Unit) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
+            when (key) {
+                "touchMode" -> touchMode = p.getInt("touchMode", 0)
+                "fingerPair" -> fingerPair = p.getInt("fingerPair", 1)
+                "preventThirdFinger" -> preventThirdFinger = p.getBoolean("preventThirdFinger", false)
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose {
+            prefs.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
 
     val view = LocalView.current
     var isUiVisible by remember { mutableStateOf(true) }
@@ -217,9 +232,9 @@ fun PlayScreen(
                     val screenWidth = view.width.toFloat()
                     val screenHeight = view.height.toFloat()
                     val events = if (touchMode == 1) {
-                        touchProcessor.processFullScreenTouches(event, screenWidth, screenHeight)
+                        touchProcessor.processFullScreenTouches(event, screenWidth, screenHeight, preventThirdFinger, fingerPair)
                     } else {
-                        touchProcessor.processSplitScreenTouches(event, screenWidth, screenHeight)
+                        touchProcessor.processSplitScreenTouches(event, screenWidth, screenHeight, preventThirdFinger, fingerPair)
                     }
 
                     for (e in events) {
