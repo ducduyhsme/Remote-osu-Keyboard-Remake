@@ -101,7 +101,7 @@ fun SettingsScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 20.dp)
             ) {
-                // ===== Touch Mode Section =====
+                // ===== TOUCH MODE =====
                 SettingsSection(title = "TOUCH MODE") {
                     Card(
                         colors = CardDefaults.cardColors(containerColor = DarkCard),
@@ -112,14 +112,20 @@ fun SettingsScreen(
                                 title = "Split Screen",
                                 description = "Left half = Key 1, Right half = Key 2. Extra touches are ignored.",
                                 isSelected = touchMode == 0,
-                                onClick = { touchMode = 0 }
+                                onClick = {
+                                    touchMode = 0
+                                    prefs.edit().putInt("touchMode", 0).apply()
+                                }
                             )
                             HorizontalDivider(color = DarkSurfaceVariant)
                             RadioOption(
-                                title = "Full Screen",
-                                description = "Any position works. Uses finger detection to assign keys.",
+                                title = "Full Screen Floating",
+                                description = "Tap anywhere on screen. Dynamic 2-finger anchor tracking for Key 1 & Key 2.",
                                 isSelected = touchMode == 1,
-                                onClick = { touchMode = 1 }
+                                onClick = {
+                                    touchMode = 1
+                                    prefs.edit().putInt("touchMode", 1).apply()
+                                }
                             )
                         }
                     }
@@ -155,7 +161,10 @@ fun SettingsScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Switch(
                                 checked = preventThirdFinger,
-                                onCheckedChange = { preventThirdFinger = it },
+                                onCheckedChange = {
+                                    preventThirdFinger = it
+                                    prefs.edit().putBoolean("preventThirdFinger", it).apply()
+                                },
                                 colors = SwitchDefaults.colors(
                                     checkedTrackColor = WarningYellow,
                                     checkedThumbColor = Color.White
@@ -196,7 +205,10 @@ fun SettingsScreen(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Switch(
                                     checked = useCalibration,
-                                    onCheckedChange = { useCalibration = it },
+                                    onCheckedChange = {
+                                        useCalibration = it
+                                        prefs.edit().putBoolean("useCalibration", it).apply()
+                                    },
                                     colors = SwitchDefaults.colors(
                                         checkedTrackColor = NeonCyan,
                                         checkedThumbColor = Color.White
@@ -238,7 +250,10 @@ fun SettingsScreen(
                                         title = pair.name,
                                         description = pair.description,
                                         isSelected = selectedFingerPair == index,
-                                        onClick = { selectedFingerPair = index },
+                                        onClick = {
+                                            selectedFingerPair = index
+                                            prefs.edit().putInt("fingerPair", index).apply()
+                                        },
                                         accentColor = if (pair.description.contains("Recommended"))
                                             SuccessGreen else null
                                     )
@@ -276,7 +291,10 @@ fun SettingsScreen(
                                 }
                                 Switch(
                                     checked = vibrationEnabled,
-                                    onCheckedChange = { vibrationEnabled = it },
+                                    onCheckedChange = {
+                                        vibrationEnabled = it
+                                        prefs.edit().putBoolean("vibration", it).apply()
+                                    },
                                     colors = SwitchDefaults.colors(
                                         checkedTrackColor = OsuPink,
                                         checkedThumbColor = Color.White
@@ -293,7 +311,10 @@ fun SettingsScreen(
                                 )
                                 Slider(
                                     value = vibrationIntensity,
-                                    onValueChange = { vibrationIntensity = it },
+                                    onValueChange = {
+                                        vibrationIntensity = it
+                                        prefs.edit().putFloat("vib_intensity", it).apply()
+                                    },
                                     colors = SliderDefaults.colors(
                                         thumbColor = OsuPink,
                                         activeTrackColor = OsuPink
@@ -340,7 +361,10 @@ fun SettingsScreen(
                             }
                             Switch(
                                 checked = visualFeedback,
-                                onCheckedChange = { visualFeedback = it },
+                                onCheckedChange = {
+                                    visualFeedback = it
+                                    prefs.edit().putBoolean("visual", it).apply()
+                                },
                                 colors = SwitchDefaults.colors(
                                     checkedTrackColor = NeonCyan,
                                     checkedThumbColor = Color.White
@@ -378,27 +402,6 @@ fun SettingsScreen(
                             )
                         }
                     }
-                }
-
-                // ===== Save Button =====
-                Button(
-                    onClick = {
-                        prefs.edit()
-                            .putInt("fingerPair", selectedFingerPair)
-                            .putBoolean("vibration", vibrationEnabled)
-                            .putFloat("vib_intensity", vibrationIntensity)
-                            .putBoolean("visual", visualFeedback)
-                            .putInt("touchMode", touchMode)
-                            .putBoolean("useCalibration", useCalibration)
-                            .putBoolean("preventThirdFinger", preventThirdFinger)
-                            .apply()
-                        onBack()
-                    },
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = OsuPink)
-                ) {
-                    Text("Save Changes", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
 
                 Spacer(modifier = Modifier.height(32.dp))

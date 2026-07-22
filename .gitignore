@@ -62,3 +62,7 @@ Thumbs.db
 # IDE
 .vscode/
 *.code-workspace
+
+# AI Agents
+.agent/
+GEMINI.md

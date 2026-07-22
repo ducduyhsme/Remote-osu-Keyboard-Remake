@@ -26,6 +26,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -69,9 +70,8 @@ fun PlayScreen(
     
     val touchMode = remember { prefs.getInt("touchMode", 0) }
     val fingerPair = remember { prefs.getInt("fingerPair", 0) }
-    val useCalibration = remember { prefs.getBoolean("useCalibration", false) }
 
-    val view = androidx.compose.ui.platform.LocalView.current
+    val view = LocalView.current
     var isUiVisible by remember { mutableStateOf(true) }
 
     // State
@@ -83,12 +83,6 @@ fun PlayScreen(
     var key1Pressed by remember { mutableStateOf(false) }
     var key2Pressed by remember { mutableStateOf(false) }
     val touchProcessor = remember { TouchProcessor() }
-
-    val (key1FingerIndex, key2FingerIndex) = when (fingerPair) {
-        0 -> Pair(2, 3) // Trỏ + Giữa
-        1 -> Pair(1, 3) // Ngón thứ 2 và 4
-        else -> Pair(2, 3)
-    }
 
     // Touch ripple animations
     var key1RippleCenter by remember { mutableStateOf<Offset?>(null) }
@@ -138,93 +132,57 @@ fun PlayScreen(
                 .pointerInteropFilter { event ->
                     val screenWidth = view.width.toFloat()
                     val screenHeight = view.height.toFloat()
-                    if (touchMode == 1) {
-                        // Full Screen 2-Finger Floating Mode
-                        val events = touchProcessor.processFullScreenTouches(event, screenWidth, screenHeight)
-                        for (e in events) {
-                            if (e.keyIndex == 0) {
-                                key1Pressed = e.isDown
-                                if (e.isDown) key1RippleCenter = Offset(event.getX(event.actionIndex), event.getY(event.actionIndex))
-                            } else {
-                                key2Pressed = e.isDown
-                                if (e.isDown) key2RippleCenter = Offset(event.getX(event.actionIndex), event.getY(event.actionIndex))
-                            }
-                            connectionManager.sendKeyEvent(e.keyIndex, e.isDown)
-                        }
-                        
-                        if (event.actionMasked == MotionEvent.ACTION_MOVE) {
-                            for (i in 0 until event.pointerCount) {
-                                val pid = event.getPointerId(i)
-                                if (pid == touchProcessor.getPointerIdForKey(0)) {
-                                    key1RippleCenter = Offset(event.getX(i), event.getY(i))
-                                } else if (pid == touchProcessor.getPointerIdForKey(1)) {
-                                    key2RippleCenter = Offset(event.getX(i), event.getY(i))
-                                }
-                            }
-                        }
-
-                        if (event.actionMasked == MotionEvent.ACTION_CANCEL) {
-                            touchProcessor.reset()
-                            key1Pressed = false
-                            key2Pressed = false
-                        }
-                        return@pointerInteropFilter true
+                    val events = if (touchMode == 1) {
+                        touchProcessor.processFullScreenTouches(event, screenWidth, screenHeight)
                     } else {
-                        // Split Screen Mode
-                        when (event.actionMasked) {
-                            MotionEvent.ACTION_DOWN,
-                            MotionEvent.ACTION_POINTER_DOWN -> {
-                                val pointerIndex = event.actionIndex
-                                val pointerId = event.getPointerId(pointerIndex)
-                                val x = event.getX(pointerIndex)
-                                val y = event.getY(pointerIndex)
-                                val isLeftSide = x < screenWidth / 2
+                        touchProcessor.processSplitScreenTouches(event, screenWidth, screenHeight)
+                    }
 
-                                val result = touchProcessor.onFingerDown(pointerId, x, y, isLeftSide)
-                                if (result != null) {
-                                    if (result.keyIndex == 0) {
-                                        key1Pressed = true
-                                        key1RippleCenter = Offset(x, y)
-                                    } else {
-                                        key2Pressed = true
-                                        key2RippleCenter = Offset(x, y)
-                                    }
-                                    connectionManager.sendKeyEvent(result.keyIndex, true)
-                                }
-                                true
+                    for (e in events) {
+                        if (e.keyIndex == 0) {
+                            key1Pressed = e.isDown
+                            if (e.isDown && event.pointerCount > 0) {
+                                val idx = event.actionIndex.coerceIn(0, event.pointerCount - 1)
+                                key1RippleCenter = Offset(event.getX(idx), event.getY(idx))
                             }
-
-                            MotionEvent.ACTION_UP,
-                            MotionEvent.ACTION_POINTER_UP -> {
-                                val pointerIndex = event.actionIndex
-                                val pointerId = event.getPointerId(pointerIndex)
-
-                                val result = touchProcessor.onFingerUp(pointerId)
-                                if (result != null) {
-                                    if (result.keyIndex == 0) key1Pressed = false
-                                    else key2Pressed = false
-                                    connectionManager.sendKeyEvent(result.keyIndex, false)
-                                }
-                                true
+                        } else {
+                            key2Pressed = e.isDown
+                            if (e.isDown && event.pointerCount > 0) {
+                                val idx = event.actionIndex.coerceIn(0, event.pointerCount - 1)
+                                key2RippleCenter = Offset(event.getX(idx), event.getY(idx))
                             }
+                        }
+                        connectionManager.sendKeyEvent(e.keyIndex, e.isDown)
+                    }
 
-                            MotionEvent.ACTION_CANCEL -> {
-                                touchProcessor.reset()
-                                if (key1Pressed) { connectionManager.sendKeyEvent(0, false); key1Pressed = false }
-                                if (key2Pressed) { connectionManager.sendKeyEvent(1, false); key2Pressed = false }
-                                true
+                    if (event.actionMasked == MotionEvent.ACTION_MOVE && touchMode == 1) {
+                        for (i in 0 until event.pointerCount) {
+                            val pid = event.getPointerId(i)
+                            if (pid == touchProcessor.getPointerIdForKey(0)) {
+                                key1RippleCenter = Offset(event.getX(i), event.getY(i))
+                            } else if (pid == touchProcessor.getPointerIdForKey(1)) {
+                                key2RippleCenter = Offset(event.getX(i), event.getY(i))
                             }
-                            else -> true
                         }
                     }
+
+                    if (event.actionMasked == MotionEvent.ACTION_CANCEL || event.pointerCount == 0) {
+                        val resetEvents = touchProcessor.reset()
+                        for (e in resetEvents) {
+                            if (e.keyIndex == 0) key1Pressed = false
+                            else key2Pressed = false
+                            connectionManager.sendKeyEvent(e.keyIndex, false)
+                        }
+                    }
+                    true
                 }
         ) {
             // Draw split line if in split mode
             if (touchMode == 0) {
                 drawLine(
-                    color = Color.DarkGray.copy(alpha = 0.3f),
-                    start = Offset(size.width / 2, 0f),
-                    end = Offset(size.width / 2, size.height),
+                    color = Color.White.copy(alpha = 0.25f),
+                    start = Offset(size.width / 2f, 0f),
+                    end = Offset(size.width / 2f, size.height),
                     strokeWidth = 2f
                 )
             }
